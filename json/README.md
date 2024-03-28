@@ -23,6 +23,7 @@ The JSON library in C offers comprehensive tools for handling JSON data within C
 - `json_query(const JsonElement *element, const char *query)`: Queries JSON data using a specific query language or path expression.
 - `json_merge(const JsonElement *element1, const JsonElement *element2)`: Merges two JSON objects or arrays into one.
 - `json_deep_copy(const JsonElement *element)`: Creates a deep copy of JSON data.
+- `json_clone(const JsonElement *element)`: Create a shallow copy of a JSON element. This is different from a deep copy as it would copy the references for array and object types instead of duplicating all nested elements.
 - `json_parse_with_options(const char *json_str, JsonParseOptions options)`: Parses a JSON string with specific parsing options.
 - `json_find(const JsonElement *element, JsonPredicate predicate, void *user_data)`: Finds an element in a JSON object or array based on a predicate.
 - `json_filter(const JsonElement *array, JsonPredicate predicate, void *user_data)`: Filters elements in a JSON array based on a predicate.
@@ -43,7 +44,9 @@ The JSON library in C offers comprehensive tools for handling JSON data within C
 - `json_deallocate(JsonElement *element)`: Deallocates a JSON element and its contents.
 - `json_compare(const JsonElement *element1, const JsonElement *element2)`: Compares two JSON elements.
 - `json_to_string_array` : convert array element in json to string array.
-
+- `json_add_to_array`: add objects or other kind of elements to array element in json.
+- `json_add_to_object`: add any kind of elements to json objects.
+- `json_query`: get element in json just by one query.
 ---
 
 ## Example 1: How to Read from a JSON File and Parse It `json_read_from_file` and `json_parse`
@@ -1130,6 +1133,838 @@ int main() {
     }
 
     json_deallocate(jsonElement);
+    return 0;
+}
+```
+
+## Example 28: Doubling Numbers in a JSON Array
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+
+// Function to double the number in a JSON element
+JsonElement* double_number(const JsonElement* element, void* user_data) {
+    (void)user_data;
+    if (element->type == JSON_NUMBER) {
+        JsonElement* newElement = json_create(JSON_NUMBER);
+        newElement->value.number_val = element->value.number_val * 2;
+        return newElement;
+    }
+    return json_deep_copy(element); // Return a copy of the element if it's not a number
+}
+
+int main() {
+    const char* jsonString = "[1, 2, 3, 4, 5]";
+    JsonElement* jsonElement = json_parse(jsonString);
+
+    if (jsonElement) {
+        JsonElement* doubledArray = json_map(jsonElement, double_number, NULL);
+        if (doubledArray) {
+            fmt_printf("Doubled numbers array:\n");
+            json_print(doubledArray);
+            json_deallocate(doubledArray);
+        } 
+        else {
+            fmt_printf("Failed to map the JSON array.\n");
+        }
+        json_deallocate(jsonElement);
+    } 
+    else {
+        fmt_printf("Failed to parse JSON string.\n");
+    }
+    return 0;
+}
+```
+
+## Example 29: Converting Numbers to Strings in a JSON Array
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+#include <stdlib.h>
+
+// Function to convert a number to a string
+JsonElement* number_to_string(const JsonElement* element, void* user_data) {
+    (void)user_data;
+    if (element->type == JSON_NUMBER) {
+        char buffer[64];
+        snprintf(buffer, sizeof(buffer), "%g", element->value.number_val);
+        JsonElement* stringElement = json_create(JSON_STRING);
+        stringElement->value.string_val = string_strdup(buffer);
+        return stringElement;
+    }
+    return json_deep_copy(element); // Return a copy of the element if it's not a number
+}
+
+int main() {
+    const char* jsonString = "[1, 2, 3.5, 4, 5]";
+    JsonElement* jsonElement = json_parse(jsonString);
+
+    if (jsonElement) {
+        JsonElement* stringArray = json_map(jsonElement, number_to_string, NULL);
+        if (stringArray) {
+            fmt_printf("Numbers converted to strings:\n");
+            json_print(stringArray);
+            json_deallocate(stringArray);
+        } 
+        else {
+            fmt_printf("Failed to map the JSON array.\n");
+        }
+        json_deallocate(jsonElement);
+    } 
+    else {
+        fmt_printf("Failed to parse JSON string.\n");
+    }
+    return 0;
+}
+```
+
+## Example 30: Changing Boolean Values in a JSON Array
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+
+// Function to invert boolean values
+JsonElement* invert_boolean(const JsonElement* element, void* user_data) {
+    (void)user_data;
+    if (element->type == JSON_BOOL) {
+        JsonElement* newElement = json_create(JSON_BOOL);
+        newElement->value.bool_val = !element->value.bool_val;
+        return newElement;
+    }
+    return json_deep_copy(element); // Return a copy of the element if it's not a boolean
+}
+
+int main() {
+    const char* jsonString = "[true, false, true, false]";
+    JsonElement* jsonElement = json_parse(jsonString);
+
+    if (jsonElement) {
+        JsonElement* invertedArray = json_map(jsonElement, invert_boolean, NULL);
+        if (invertedArray) {
+            fmt_printf("Inverted boolean array:\n");
+            json_print(invertedArray);
+            json_deallocate(invertedArray);
+        } 
+        else {
+            fmt_printf("Failed to map the JSON array.\n");
+        }
+        json_deallocate(jsonElement);
+    } 
+    else {
+        fmt_printf("Failed to parse JSON string.\n");
+    }
+    return 0;
+}
+```
+
+## Example 31 : how to filter element in json file and then write to file `json_filter`
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+
+// Predicate function to check if a book is available
+bool is_book_available(const JsonElement* element, void* user_data) {
+    (void)user_data; // Explicitly mark user_data as unused
+    if (element->type == JSON_OBJECT) {
+        JsonElement* available = json_get_element(element, "available");
+        return available && available->type == JSON_BOOL && available->value.bool_val;
+    }
+    return false; // Not a JSON object or not an available book
+}
+
+int main() {
+    JsonElement* jsonElement = json_read_from_file("./sources/json_example.json");
+
+    if (jsonElement) {
+        JsonElement* categories = json_get_element(jsonElement, "categories");
+        if (categories && categories->type == JSON_ARRAY) {
+            JsonElement* booksCategory = json_get_element(categories, "0");
+            if (booksCategory && booksCategory->type == JSON_OBJECT) {
+                JsonElement* items = json_get_element(booksCategory, "items");
+
+                if (items && items->type == JSON_ARRAY) {
+                    JsonElement* availableBooks = json_filter(items, is_book_available, NULL);
+                    if (availableBooks) {
+                        fmt_printf("Available books:\n");
+                        json_print(availableBooks);
+
+                        json_set_element(booksCategory, "items", availableBooks);
+
+                        // Write the updated JSON element to a file
+                        if (json_write_to_file(jsonElement, "./sources/filtered_books.json")) {
+                            fmt_printf("Filtered JSON successfully written to './sources/filtered_books.json'.\n");
+                        } 
+                        else {
+                            fmt_printf("Failed to write filtered JSON to file.\n");
+                        }
+                    } 
+                    else {
+                        fmt_printf("Failed to filter available books.\n");
+                    }
+                } 
+                else {
+                    fmt_printf("Items in 'Books' category are not an array or not found.\n");
+                }
+            } 
+            else {
+                fmt_printf("Books category not found.\n");
+            }
+        } 
+        else {
+            fmt_printf("'categories' element is not an array or not found.\n");
+        }
+        json_deallocate(jsonElement);
+    } 
+    else {
+        fmt_printf("Failed to parse JSON file './sources/json_example.json'.\n");
+    }
+    return 0;
+}
+```
+
+## Example 32 : how to sum up the numbers with arrays element in json using `json_reduce`
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+
+// Reduction function to sum numbers
+void* sum_numbers(const JsonElement* element, void* accumulator, void* user_data) {
+    (void)user_data;
+    if (element->type == JSON_NUMBER) {
+        double* sum = (double*)accumulator;
+        *sum += element->value.number_val;
+    }
+    return accumulator;
+}
+
+int main() {
+    // Assume jsonElement is initialized by parsing the JSON data
+    JsonElement* jsonElement = json_read_from_file("./sources/json_example.json");
+
+    if (jsonElement) {
+        // Access the 'additional_info' object
+        JsonElement* additionalInfo = json_get_element(jsonElement, "additional_info");
+        if (additionalInfo && additionalInfo->type == JSON_OBJECT) {
+            // Access the 'numbers' array within 'additional_info'
+            JsonElement* numbersArray = json_get_element(additionalInfo, "numbers");
+            if (numbersArray && numbersArray->type == JSON_ARRAY) {
+                double initial_value = 0.0;
+                double* sum = (double*)json_reduce(numbersArray, sum_numbers, &initial_value, NULL);
+                if (sum) {
+                    fmt_printf("Sum of numbers in the array: %f\n", *sum);
+                } 
+                else {
+                    fmt_printf("Failed to calculate sum.\n");
+                }
+            } 
+            else {
+                fmt_printf("'numbers' array not found or not an array.\n");
+            }
+        } 
+        else {
+            fmt_printf("'additional_info' object not found or not an object.\n");
+        }
+
+        json_deallocate(jsonElement);
+    } 
+    else {
+        fmt_printf("Failed to parse JSON file.\n");
+    }
+
+    return 0;
+}
+```
+
+## Example 33 : concatenates names with `json_reduce`
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+#include "string/string.h"
+#include <string.h>
+#include <stdlib.h>
+
+
+// Reduction function to concatenate strings
+void* concatenate_strings(const JsonElement* element, void* accumulator, void* user_data) {
+    (void)user_data;
+    if (element->type == JSON_STRING) {
+        char** combined = (char**)accumulator;
+        if (*combined == NULL) {
+            // Allocate memory for the first time
+            *combined = string_strdup(element->value.string_val);
+        } 
+        else {
+            // Calculate new size and reallocate memory
+            size_t new_size = strlen(*combined) + strlen(element->value.string_val) + 2; // +2 for comma and null terminator
+            char* new_str = (char*)realloc(*combined, new_size);
+
+            if (new_str) {
+                strcat(new_str, ",");
+                strcat(new_str, element->value.string_val);
+                *combined = new_str;
+            }
+        }
+    }
+    return accumulator;
+}
+
+int main() {
+    JsonElement* jsonElement = json_read_from_file("./sources/json_example.json");
+
+    JsonElement *addinfo = json_get_element(jsonElement, "additional_info");
+    if (addinfo && addinfo->type == JSON_OBJECT) {
+        JsonElement* contributorsArray = json_get_element(addinfo, "contributors");
+        if (contributorsArray && contributorsArray->type == JSON_ARRAY) {
+            char* concatenatedNames = NULL;
+            json_reduce(contributorsArray, concatenate_strings, &concatenatedNames, NULL);
+
+            if (concatenatedNames) {
+                fmt_printf("Concatenated names: %s\n", concatenatedNames);
+                free(concatenatedNames);
+            } 
+            else {
+                fmt_printf("Failed to concatenate names.\n");
+            }
+        } 
+        else {
+            fmt_printf("Contributors array not found or not an array.\n");
+        }
+        json_deallocate(jsonElement);
+    } 
+    else {
+        fmt_printf("Failed to parse JSON file.\n");
+    }
+
+    return 0;
+}
+```
+
+## Example 34 : how to format data with `json_format`
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+#include "string/string.h"
+#include <stdlib.h>
+
+int main() {
+    JsonElement* jsonObject = json_create(JSON_OBJECT);
+    JsonElement* nameElement = json_create(JSON_STRING);
+
+    nameElement->value.string_val = string_strdup("John Doe");
+    json_set_element(jsonObject, "name", nameElement);
+
+    JsonElement* ageElement = json_create(JSON_NUMBER);
+    ageElement->value.number_val = 30;
+    json_set_element(jsonObject, "age", ageElement);
+
+    JsonElement* isStudentElement = json_create(JSON_BOOL);
+    isStudentElement->value.bool_val = true;
+    json_set_element(jsonObject, "isStudent", isStudentElement);
+
+    char* formattedJson = json_format(jsonObject);
+    if (formattedJson) {
+        fmt_printf("Formatted JSON:\n%s\n", formattedJson);
+        free(formattedJson);
+    } 
+    else {
+        fmt_printf("Failed to format JSON.\n");
+    }
+
+    json_deallocate(jsonObject);
+    return 0;
+}
+```
+
+## Example 35 : how to create a nested JSON structure with various data types, including arrays and objects.format this with `json_format`
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+#include "string/string.h"
+#include <stdlib.h>
+
+int main() {
+    JsonElement* jsonObject = json_create(JSON_OBJECT);
+    JsonElement* nameElement = json_create(JSON_STRING);
+
+    nameElement->value.string_val = string_strdup("John Doe");
+    json_set_element(jsonObject, "name", nameElement);
+
+    // Add a number element
+    JsonElement* ageElement = json_create(JSON_NUMBER);
+    ageElement->value.number_val = 30;
+    json_set_element(jsonObject, "age", ageElement);
+
+    // Add a boolean element
+    JsonElement* isStudentElement = json_create(JSON_BOOL);
+    isStudentElement->value.bool_val = true;
+    json_set_element(jsonObject, "isStudent", isStudentElement);
+
+    // Add an array element
+    JsonElement* hobbiesArray = json_create(JSON_ARRAY);
+    JsonElement* hobby1 = json_create(JSON_STRING);
+    hobby1->value.string_val = string_strdup("Reading");
+    vector_push_back(hobbiesArray->value.array_val, &hobby1);
+    JsonElement* hobby2 = json_create(JSON_STRING);
+    hobby2->value.string_val = string_strdup("Hiking");
+    vector_push_back(hobbiesArray->value.array_val, &hobby2);
+    json_set_element(jsonObject, "hobbies", hobbiesArray);
+
+    // Add a nested object
+    JsonElement* addressObject = json_create(JSON_OBJECT);
+    JsonElement* streetElement = json_create(JSON_STRING);
+
+    streetElement->value.string_val = string_strdup("123 Main St");
+    json_set_element(addressObject, "street", streetElement);
+
+    JsonElement* cityElement = json_create(JSON_STRING);
+    cityElement->value.string_val = string_strdup("Anytown");
+    json_set_element(addressObject, "city", cityElement);
+    json_set_element(jsonObject, "address", addressObject);
+
+    char* formattedJson = json_format(jsonObject);
+    if (formattedJson) {
+        fmt_printf("Formatted JSON:\n%s\n", formattedJson);
+
+        const char* filename = "./sources/output_json.json";
+        if (json_write_to_file(jsonObject, filename)) {
+            fmt_printf("JSON successfully written to '%s'.\n", filename);
+        } 
+        else {
+            fmt_printf("Failed to write JSON to file '%s'.\n", filename);
+        }
+
+        free(formattedJson);
+    } 
+    else {
+        fmt_printf("Failed to format JSON.\n");
+    }
+
+    json_deallocate(jsonObject);
+    return 0;
+}
+```
+
+## Example 36 : Parsing a Single Number as json 
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+
+int main() {
+    const char* jsonString = "42";
+    JsonElement* jsonElement = json_parse(jsonString);
+
+    if (jsonElement) {
+        if (jsonElement->type == JSON_NUMBER) {
+            fmt_printf("Parsed JSON number: %f\n", jsonElement->value.number_val);
+        } 
+        else {
+            fmt_printf("Parsed JSON element is not a number.\n");
+        }
+        json_deallocate(jsonElement);
+    } 
+    else {
+        fmt_printf("Failed to parse JSON string.\n");
+    }
+
+    return 0;
+}
+```
+
+## Example 37 : Parsing a Single String value as json 
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+
+int main() {
+    const char* jsonString = "\"Hello, world!\"";  // JSON string
+    JsonElement* jsonElement = json_parse(jsonString);
+
+    if (jsonElement && jsonElement->type == JSON_STRING) {
+        fmt_printf("Parsed JSON string: %s\n", jsonElement->value.string_val);
+    } 
+    else {
+        fmt_printf("Failed to parse JSON string or JSON is not a string.\n");
+    }
+
+    json_deallocate(jsonElement);
+    return 0;
+}
+```
+
+## Example 38 : create shallow copy of original json object with `json_clone`
+
+```c
+#include "json/json.h"
+#include "string/string.h"
+#include "fmt/fmt.h"
+
+int main() {
+    JsonElement* root = json_create(JSON_OBJECT);
+
+    // Adding a string element
+    JsonElement* name = json_create(JSON_STRING);
+    name->value.string_val = string_strdup("John Doe");
+    json_set_element(root, "name", name);
+
+    // Adding a number element
+    JsonElement* age = json_create(JSON_NUMBER);
+    age->value.number_val = 30;
+    json_set_element(root, "age", age);
+
+    // Adding a boolean element
+    JsonElement* isStudent = json_create(JSON_BOOL);
+    isStudent->value.bool_val = true;
+    json_set_element(root, "isStudent", isStudent);
+
+    // Adding an array element
+    JsonElement* hobbies = json_create(JSON_ARRAY);
+    JsonElement* hobby1 = json_create(JSON_STRING);
+    hobby1->value.string_val = string_strdup("Reading");
+    vector_push_back(hobbies->value.array_val, &hobby1);
+
+    JsonElement* hobby2 = json_create(JSON_STRING);
+    hobby2->value.string_val = string_strdup("Hiking");
+    vector_push_back(hobbies->value.array_val, &hobby2);
+    json_set_element(root, "hobbies", hobbies);
+
+    // Clone the root JSON element
+    JsonElement* clonedRoot = json_clone(root);
+
+    if (clonedRoot) {
+        JsonElement* clonedAge = json_get_element(clonedRoot, "age");
+        if (clonedAge && clonedAge->type == JSON_NUMBER) {
+            clonedAge->value.number_val = 35;
+        }
+        // Adding a new hobby to the cloned JSON
+        JsonElement* newHobby = json_create(JSON_STRING);
+        newHobby->value.string_val = string_strdup("Gaming");
+        vector_push_back(hobbies->value.array_val, &newHobby); // This affects both root and clonedRoot due to shallow copy
+    }
+
+    fmt_printf("Original JSON:\n");
+    json_print(root);
+
+    fmt_printf("\nCloned and modified JSON:\n");
+    json_print(clonedRoot);
+
+    json_deallocate(root);
+    json_deallocate(clonedRoot);
+
+    return 0;
+}
+```
+
+## Example 39 : Reading JSON from a File and Getting its Keys with `json_get_keys`
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+#include <stdlib.h>
+
+int main() {
+    const char* jsonFilePath = "./sources/json_example.json";
+    JsonElement* jsonElement = json_read_from_file(jsonFilePath);
+
+    if (jsonElement && jsonElement->type == JSON_OBJECT) {
+        size_t num_keys;
+        char** keys = json_get_keys(jsonElement, &num_keys);
+
+        if (keys) {
+            fmt_printf("Keys in JSON object:\n");
+            for (size_t i = 0; i < num_keys; ++i) {
+                fmt_printf("  Key %zu: %s\n", i + 1, keys[i]);
+                free(keys[i]); 
+            }
+            free(keys);
+        } 
+        else {
+            fmt_printf("Failed to get keys from JSON object.\n");
+        }
+        json_deallocate(jsonElement);
+    } 
+    else {
+        fmt_printf("Failed to parse JSON file '%s'.\n", jsonFilePath);
+    }
+
+    return 0;
+}
+```
+
+## Example 40 : Using a JSON String and Getting its Keys with `json_get_keys`
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+#include <stdlib.h>
+
+int main() {
+    const char* jsonString = "{\"name\": \"John Doe\", \"age\": 30, \"city\": \"New York\"}";
+    JsonElement* jsonElement = json_parse(jsonString);
+
+    if (jsonElement && jsonElement->type == JSON_OBJECT) {
+        size_t num_keys;
+        char** keys = json_get_keys(jsonElement, &num_keys);
+
+        if (keys) {
+            fmt_printf("Keys in JSON object:\n");
+            for (size_t i = 0; i < num_keys; ++i) {
+                fmt_printf("  Key %zu: %s\n", i + 1, keys[i]);
+                free(keys[i]);
+            }
+            free(keys); 
+        } 
+        else {
+            fmt_printf("Failed to get keys from JSON object.\n");
+        }
+        json_deallocate(jsonElement);
+    } 
+    else {
+        fmt_printf("Failed to parse JSON string.\n");
+    }
+
+    return 0;
+}
+```
+
+## Example 41 : how to add items to array element in json with `json_add_to_array` 
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+
+int main() {
+    JsonElement* root = json_read_from_file("./sources/json_example.json");
+
+    JsonElement* categories = json_get_element(root, "categories");
+    JsonElement* moviesCategory = json_get_element(categories, "1"); // Direct access if you know the position
+    JsonElement* moviesItems = json_get_element(moviesCategory, "items");
+
+    JsonElement* newMovie = json_create(JSON_OBJECT);
+
+    // Set properties on the new movie object
+    JsonElement* title = json_create(JSON_STRING);
+    title->value.string_val = "JSON's Adventure";
+    json_set_element(newMovie, "title", title);
+
+    JsonElement* director = json_create(JSON_STRING);
+    director->value.string_val = "Chris Coder";
+    json_set_element(newMovie, "director", director);
+
+    JsonElement* releasedYear = json_create(JSON_NUMBER);
+    releasedYear->value.number_val = 2024;
+    json_set_element(newMovie, "released_year", releasedYear);
+
+    // Create and set ratings object
+    JsonElement* ratings = json_create(JSON_OBJECT);
+    JsonElement* imdbRating = json_create(JSON_NUMBER);
+    imdbRating->value.number_val = 8.5;
+    json_set_element(ratings, "IMDB", imdbRating);
+
+    JsonElement* rtRating = json_create(JSON_STRING);
+    rtRating->value.string_val = "92%";
+    json_set_element(ratings, "Rotten Tomatoes", rtRating);
+    json_set_element(newMovie, "ratings", ratings);
+    
+    if (json_add_to_array(moviesItems, newMovie)) {
+        fmt_printf("add successfully to array\n");
+    } 
+    else {
+        fmt_printf("failed in adding to array\n");
+    }
+
+    if (json_write_to_file(root, "./sources/modified_json_example.json")) {
+        fmt_printf("Write to file successfully.\n");
+    } 
+    else {
+        fmt_printf("Failed to write to file.\n");
+    }
+
+    json_deallocate(root);
+    return 0;
+}
+```
+
+## Example 42 : how to add object to json as new element with `json_add_to_object`
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+#include "string/string.h"
+
+int main() {
+    JsonElement* root = json_read_from_file("./sources/json_example.json");
+    JsonElement* jsonObject = json_create(JSON_OBJECT);
+
+    JsonElement* titleElement = json_create(JSON_STRING);
+    titleElement->value.string_val = string_strdup("Introduction to JSON");
+    
+    // Add the string element to the object with the key "title"
+    if (!json_add_to_object(jsonObject, "title", titleElement)) {
+        fprintf(stderr, "Failed to add title to JSON object.\n");
+        // Assume json_deallocate properly deallocates the entire JSON structure
+        json_deallocate(jsonObject);
+        return 1;
+    }
+
+    // Create a new number element
+    JsonElement* yearElement = json_create(JSON_NUMBER);
+    yearElement->value.number_val = 2024;
+    
+    // Add the number element to the object with the key "year"
+    if (!json_add_to_object(jsonObject, "year", yearElement)) {
+        fprintf(stderr, "Failed to add year to JSON object.\n");
+        json_deallocate(jsonObject);
+        return 1;
+    }
+
+    // Create a nested JSON object for the author
+    JsonElement* authorObject = json_create(JSON_OBJECT);
+    JsonElement* nameElement = json_create(JSON_STRING);
+    nameElement->value.string_val = string_strdup("John Doe");
+    json_add_to_object(authorObject, "name", nameElement);
+
+    // Add the nested object to the main JSON object with the key "author"
+    if (!json_add_to_object(jsonObject, "author", authorObject)) {
+        fprintf(stderr, "Failed to add author to JSON object.\n");
+        json_deallocate(jsonObject);
+        return 1;
+    }
+
+    // add to root object 
+    if (!json_add_to_object(root, "additional_info", jsonObject)) {
+        fmt_printf("Can not add new object to root");
+    }
+
+    json_print(root);
+
+    json_deallocate(root);
+    return 0;
+}
+```
+
+## Example 42 : quering over the json with `json_query`
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+#include "string/string.h"
+
+int main() {
+    JsonElement* root = json_read_from_file("./sources/json_example.json");
+
+    // Query for the title of the first book
+    JsonElement* bookTitleElement = json_query(root, "categories[0].items[0].title");
+    if (bookTitleElement && bookTitleElement->type == JSON_STRING) {
+        fmt_printf("Title of the first book: %s\n", bookTitleElement->value.string_val);
+    } 
+    else {
+        fmt_printf("Failed to query the title of the first book.\n");
+    }
+
+    // Query for the IMDB rating of "The JSON Saga"
+    JsonElement* imdbRatingElement = json_query(root, "categories[1].items[0].ratings.IMDB");
+    if (imdbRatingElement && imdbRatingElement->type == JSON_NUMBER) {
+        fmt_printf("IMDB rating of 'The JSON Saga': %.1f\n", imdbRatingElement->value.number_val);
+    } 
+    else {
+        fmt_printf("Failed to query the IMDB rating of 'The JSON Saga'.\n");
+    }
+
+    json_deallocate(root);
+    return 0;
+}
+```
+
+## Example 43 : set query over json string with `json_query`
+
+```c
+#include "json/json.h"
+#include "fmt/fmt.h"
+
+int main() {
+    const char* jsonString = 
+        "{"
+        "  \"technology\": {"
+        "    \"products\": ["
+        "      {"
+        "        \"category\": \"Laptops\","
+        "        \"items\": ["
+        "          {"
+        "            \"name\": \"Laptop A\","
+        "            \"brand\": \"BrandOne\","
+        "            \"price\": 1200,"
+        "            \"ratings\": {"
+        "              \"tech_site\": 9.1,"
+        "              \"user_reviews\": 8.5"
+        "            }"
+        "          },"
+        "          {"
+        "            \"name\": \"Laptop B\","
+        "            \"brand\": \"BrandTwo\","
+        "            \"price\": 1500,"
+        "            \"ratings\": {"
+        "              \"tech_site\": 9.3,"
+        "              \"user_reviews\": 9.0"
+        "            }"
+        "          }"
+        "        ]"
+        "      },"
+        "      {"
+        "        \"category\": \"Smartphones\","
+        "        \"items\": ["
+        "          {"
+        "            \"name\": \"Smartphone A\","
+        "            \"brand\": \"BrandThree\","
+        "            \"price\": 700,"
+        "            \"ratings\": {"
+        "              \"tech_site\": 8.5,"
+        "              \"user_reviews\": 8.8"
+        "            }"
+        "          },"
+        "          {"
+        "            \"name\": \"Smartphone B\","
+        "            \"brand\": \"BrandFour\","
+        "            \"price\": 950,"
+        "            \"ratings\": {"
+        "              \"tech_site\": 9.0,"
+        "              \"user_reviews\": 9.2"
+        "            }"
+        "          }"
+        "        ]"
+        "      }"
+        "    ]"
+        "  }"
+        "}";
+
+    JsonElement* root = json_parse(jsonString);
+    JsonElement* laptopAPriceElement = json_query(root, "technology.products[0].items[0].price");
+
+    if (laptopAPriceElement && laptopAPriceElement->type == JSON_NUMBER) {
+        fmt_printf("Price of Laptop A: %.2f\n", laptopAPriceElement->value.number_val);
+    } 
+    else {
+        fmt_printf("Failed to query the price of Laptop A.\n");
+    }
+
+    JsonElement* smartphoneBRatingElement = json_query(root, "technology.products[1].items[1].ratings.tech_site");
+    if (smartphoneBRatingElement && smartphoneBRatingElement->type == JSON_NUMBER) {
+        fmt_printf("Tech site rating of 'Smartphone B': %.1f\n", smartphoneBRatingElement->value.number_val);
+    } 
+    else {
+        fmt_printf("Failed to query the tech site rating of 'Smartphone B'.\n");
+    }
+
+    json_deallocate(root);
     return 0;
 }
 ```

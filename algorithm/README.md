@@ -4492,3 +4492,109 @@ int main() {
 }
 
 ```
+
+## Example 137: Using `algorithm_replace`
+
+```c
+#include "algorithm/algorithm.h"
+#include "fmt/fmt.h"
+
+
+int compare_ints(const void *a, const void *b) {
+    int num1 = *(int *)a;
+    int num2 = *(int *)b;
+    return num1 - num2;
+}
+
+int main() {
+    int arr[] = {1, 2, 3, 4, 5, 5, 5, 8, 9, 10};
+    int old_val = 5;
+    int new_val = -1;
+
+    fmt_printf("Before replacement:\n");
+    for (int i = 0; i < 10; ++i) {
+        fmt_printf("%d ", arr[i]);
+    }
+    fmt_printf("\n");
+
+    algorithm_replace(arr, 10, sizeof(int), &old_val, &new_val, compare_ints);
+
+    fmt_printf("After replacement:\n");
+    for (int i = 0; i < 10; ++i) {
+        fmt_printf("%d ", arr[i]);
+    }
+    fmt_printf("\n");
+
+    return 0;
+}
+
+```
+
+## Example 138: Using `algorithm_replace_if`
+
+```c
+#include "algorithm/algorithm.h"
+#include "fmt/fmt.h"
+
+
+bool is_even(const void *n) {
+    int num = *(int *)n;
+    return num % 2 == 0;
+}
+
+int main() {
+    int arr[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    int new_val = -1;
+
+    fmt_printf("Before replacement:\n");
+    for (int i = 0; i < 10; ++i) {
+        printf("%d ", arr[i]);
+    }
+    fmt_printf("\n");
+
+    algorithm_replace_if(arr, 10, sizeof(int), &new_val, is_even);
+
+    fmt_printf("After replacement:\n");
+    for (int i = 0; i < 10; ++i) {
+        printf("%d ", arr[i]);
+    }
+    fmt_printf("\n");
+
+    return 0;
+}
+
+```
+
+## Example 139: Using `algorithm_remove_copy_if`
+
+```c
+#include "algorithm/algorithm.h"
+#include "fmt/fmt.h"
+
+bool is_even(const void *n) {
+    int num = *(int *)n;
+    return num % 2 == 0;
+}
+
+int main() {
+    int arr[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    int result[10] = {0};
+
+    fmt_printf("Source array:\n");
+    for (int i = 0; i < 10; ++i) {
+        fmt_printf("%d ", arr[i]);
+    }
+    fmt_printf("\n");
+
+    size_t count = algorithm_remove_copy_if(arr, 10, sizeof(int), result, is_even);
+
+    fmt_printf("Result array:\n");
+    for (size_t i = 0; i < count; ++i) {
+        fmt_printf("%d ", result[i]);
+    }
+    fmt_printf("\n");
+
+    return 0;
+}
+
+```
